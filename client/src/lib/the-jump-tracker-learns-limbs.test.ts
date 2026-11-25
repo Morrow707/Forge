@@ -25,7 +25,8 @@ describe("the jump tracker learns limbs", () => {
 
   it("teaches only from a corroborated take, on both save paths", () => {
     expect(dialog).toMatch(/jumpVerdict\.corroborated/);
-    expect(dialog).toMatch(/limbMeasurementSource: "consensus"/);
+    // The teacher is "consensus", or "lidar" when a corroborated LiDAR read was in the agreement (2026-11-25).
+    expect(dialog).toMatch(/limbMeasurementSource: (lidarTeaches \? "lidar" : )?"consensus"/);
     expect(dialog).toMatch(/limbMeasurementLift: exerciseName/);
     expect((dialog.match(/\.\.\.limbTeaching/g) ?? []).length).toBe(2);
   });

@@ -41,7 +41,15 @@ export const MIN_LIMB_SAMPLES = 30;
 /** Which rulers are trusted enough to teach a bone. Both are independent of the body: a plate is
  *  an object of known size, and gravity is gravity. A body-derived scale is deliberately absent
  *  -- learning a limb from a scale that was itself derived from a limb is circular. */
-export const RULERS_THAT_MAY_TEACH_A_LIMB = ["plate", "gravity", "grip_width", "consensus"] as const;
+export const RULERS_THAT_MAY_TEACH_A_LIMB = ["plate", "gravity", "grip_width", "consensus", "lidar"] as const;
+
+/* THE FIFTH TEACHER, "lidar" (2026-11-25). The LiDAR floor ruler (lidar-floor-ruler.ts) is a
+ * measured distance with no body proportion in it, so it is independent of the bones the way a
+ * plate is -- the rule above. The phone only names it as the teacher when at least one OTHER
+ * ruler agreed with it on the take (av-bar-tracker-dialog.tsx), so a LiDAR read nothing
+ * corroborated never writes into an athlete's permanent record. Scott: the camera "gets more
+ * accurate" the more someone uses it; this is how a take filmed on a LiDAR phone leaves bones
+ * that every later take, on any phone, can read. */
 
 /* THE FOURTH TEACHER, "consensus", AND A MODEL PER LIFT (2026-11-16). Scott: "it should learn my
  * height and my limb length and continue to get more accurate not starting over each week" and

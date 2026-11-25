@@ -129,6 +129,8 @@ export type PoseFrame = {
   joints: PoseJoint[];
   frameWidth: number;
   frameHeight: number;
+  /** Vision's confidence that a body was there at all; tracked frames only (2026-11-25). */
+  bodyConfidence?: number;
   leftImplement?: PoseImplement;
   rightImplement?: PoseImplement;
   coreMlImplement?: PoseCoreMlImplement;

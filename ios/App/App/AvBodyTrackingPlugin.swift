@@ -3098,6 +3098,13 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let coreMlImplement = coreMlImplement { eventData["coreMlImplement"] = coreMlImplement }
         if let coreMlSecondary = coreMlSecondary { eventData["coreMlSecondary"] = coreMlSecondary }
         if let cameraDrift = cameraDrift { eventData["cameraDrift"] = cameraDrift }
+        // HOW SURE VISION WAS THAT A BODY WAS THERE (2026-11-25). An untracked frame is Vision
+        // returning no body; a tracked frame with few joints is a body whose joints fell under the
+        // 0.1 guard above. The bench at 0.5x loses its body at the chest and nobody could say which
+        // of the two it was; with this on every tracked frame, bodyLoss in the export says so.
+        if tracked, let observation = ctx.poseRequest.results?.first {
+            eventData["bodyConfidence"] = Double(observation.confidence)
+        }
         // Omit-when-empty, not always-present like joints above -- a hand out of frame is
         // genuinely "nothing to report this frame," the same semantics leftImplement/
         // cameraDrift already use, not core per-frame state every consumer depends on.

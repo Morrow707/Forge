@@ -659,6 +659,8 @@ export type TrackingDiagnostics = {
     scaleWitnesses?: { votingCount: number; sources: string[] };
     /** THE FOURTH CAMERA SYSTEM: the LiDAR floor scan taken before the take, the ruler it made
      *  (or why none), and each other ruler's scale over it -- the cross-check overwatch reads. */
+    /** Where the body went on frames it was lost, and how -- see body-loss.ts. */
+    bodyLoss?: import("./body-loss").BodyLoss | null;
     lidarFloor?: {
       scan: { cameraHeightM: number; floorShare: number; spreadM: number; frames: number } | null;
       unavailableBecause: string | null;

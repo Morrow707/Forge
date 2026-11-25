@@ -20,6 +20,8 @@ import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks, visionBoxTopToWorldY } from "@/lib/vision-body-landmarks";
 import { bodyScaleFallbacks } from "@/lib/body-scale-fallback";
+import { LIDAR_FLOOR_RULER_UNCERTAINTY, lidarFloorScale, type LidarFloorScan } from "@/lib/lidar-floor-ruler";
+import { fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
 import {
   deriveJumpPoint, deriveHipPoint,
   detectFormFaults,
@@ -315,6 +317,11 @@ export function AvJumpTrackerDialog({
       elapsedSeconds: number;
       boxTopNormalizedY?: number;
       readerStatus?: string;
+      // The fourth camera system's floor reading and the phone's tilt (2026-11-25).
+      cameraPitchDeg?: number;
+      cameraRollDeg?: number;
+      lidarFloor?: LidarFloorScan;
+      lidarFloorUnavailableBecause?: string;
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
@@ -392,6 +399,22 @@ export function AvJumpTrackerDialog({
     // for the same reason: a source is right or wrong because of what it measured, not because
     // of which source it is.
     const jumpBodySpan = impliedBodyLengthUnits(rawFrames);
+    // THE FOURTH CAMERA SYSTEM ON A JUMP (2026-11-25): the LiDAR floor ruler, read only from frames
+    // whose feet are on the floor (lidar-floor-ruler.ts), so a long stand on the box does not move
+    // it. A peer in the vote; a lone read steps out (isSingleWitnessRuler). The box detector
+    // reads the box top badly from behind, which is what a measured floor distance can check.
+    const lidarFovDeg = fovDegFromActiveFormat(captureDeviceInfo.activeFormat);
+    const lidarRuler = lidarFloorScale({
+      scan: recordingStats.lidarFloor ?? null,
+      pitchDeg: recordingStats.cameraPitchDeg ?? null,
+      rollDeg: recordingStats.cameraRollDeg ?? null,
+      fovDeg: lidarFovDeg,
+      frames: nativeRawFrames,
+      heightIn,
+    });
+    const lidarEstimate = lidarRuler.reading
+      ? { source: "lidar" as const, scale: lidarRuler.reading.scale, uncertaintyFraction: LIDAR_FLOOR_RULER_UNCERTAINTY }
+      : null;
     const jumpScaleCandidates = [
       ...(boxScale != null
         // The 0.05 was a bare literal here until 2026-10-20 -- no name, no comment, and the
@@ -406,6 +429,7 @@ export function AvJumpTrackerDialog({
         ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: t.heightRulerUncertainty }]
         : []),
       ...bodyFallbacks.candidates,
+      ...(lidarEstimate ? [lidarEstimate] : []),
     ];
     const { kept: jumpScalesKept, rejected: jumpScalesRejected } = rejectImplausibleScales(
       jumpScaleCandidates,
@@ -436,10 +460,12 @@ export function AvJumpTrackerDialog({
         }
       : null;
     const teachesLimbs = exerciseName != null && jumpVerdict.corroborated && jumpVerdict.scale != null;
+    // A corroborated LiDAR read teaches from its own scale, as on the bar (athlete-body-model.ts).
+    const lidarTeaches = teachesLimbs && lidarEstimate != null && jumpVerdict.agreedSources.includes("lidar");
     const limbTeaching = teachesLimbs
       ? {
-          limbMeasurementsM: measureLimbsInMetres(rawFrames, jumpVerdict.scale),
-          limbMeasurementSource: "consensus",
+          limbMeasurementsM: measureLimbsInMetres(rawFrames, lidarTeaches ? lidarEstimate!.scale : jumpVerdict.scale),
+          limbMeasurementSource: lidarTeaches ? "lidar" : "consensus",
           limbMeasurementLift: exerciseName,
         }
       : {};
@@ -455,6 +481,7 @@ export function AvJumpTrackerDialog({
         | "height"
         | "plate"
         | "box"
+        | "lidar"
         | "both"
         | "shoulder_width"
         | "body_3d"
@@ -470,6 +497,23 @@ export function AvJumpTrackerDialog({
         ratioToChosen: o.ratioToChosen,
       })),
       scaleCorroborated: jumpVerdict.corroborated,
+      lidarFloor: {
+        scan: recordingStats.lidarFloor ?? null,
+        unavailableBecause: recordingStats.lidarFloorUnavailableBecause ?? null,
+        scale: lidarRuler.reading?.scale ?? null,
+        distanceM: lidarRuler.reading ? Math.round(lidarRuler.reading.distanceM * 1000) / 1000 : null,
+        framesUsed: lidarRuler.reading?.framesUsed ?? null,
+        ankleHeightM: lidarRuler.reading ? Math.round(lidarRuler.reading.ankleHeightM * 1000) / 1000 : null,
+        refusedBecause: lidarRuler.refusedBecause,
+        fovDeg: lidarFovDeg ?? null,
+        ratioTo: lidarRuler.reading
+          ? Object.fromEntries(
+              jumpScaleCandidates
+                .filter((c) => c.source !== "lidar")
+                .map((c) => [c.source, Math.round((c.scale / lidarRuler.reading!.scale) * 1000) / 1000]),
+            )
+          : {},
+      },
       body3DRuler: bodyFallbacks.body3DRuler,
       scalesRejectedAsImplausible: jumpScalesRejected.map((r) => ({
         source: r.source,
@@ -1068,7 +1112,7 @@ export function AvJumpTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ detectBox: usesBox === true, ...JUMP_SENSOR_STRIDES });
+                  startRecording({ detectBox: usesBox === true, lidarFloorScan: true, ...JUMP_SENSOR_STRIDES });
                 }}
                 disabled={!supported || !heightIn}
               >

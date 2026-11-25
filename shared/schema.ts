@@ -10757,6 +10757,19 @@ export const trackingDiagnosticsSchema = z.object({
         })
         .optional()
         .nullable(),
+      // Where the body went, and how (2026-11-25) -- see client/src/lib/body-loss.ts.
+      bodyLoss: z
+        .object({
+          frames: z.number(),
+          noBody: z.number(),
+          bodyNoWrists: z.number(),
+          bodyNoShoulders: z.number(),
+          longestNoBodySeconds: z.number(),
+          medianBodyConfidence: z.number().nullable(),
+          medianBodyConfidenceAtEdges: z.number().nullable(),
+        })
+        .optional()
+        .nullable(),
       // THE FOURTH CAMERA SYSTEM (2026-11-24): what LiDAR measured before the take, the ruler it
       // made, or why it made none, and how it sat against the other rulers. See lidar-floor-ruler.ts.
       lidarFloor: z

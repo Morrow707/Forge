@@ -21,6 +21,7 @@ import {
   type LimbKey,
 } from "@shared/athlete-body-model";
 import { measureLegVisibility, measureLimbsInMetres, measureLimbSpansInUnits, type LegVisibility } from "@/lib/measure-limbs";
+import { measureBodyLoss } from "@/lib/body-loss";
 import { LIDAR_FLOOR_RULER_UNCERTAINTY, lidarFloorScale, type LidarFloorScan } from "@/lib/lidar-floor-ruler";
 import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY, body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
 import { measureAxisForeshortening } from "@/lib/axis-foreshortening";
@@ -1648,6 +1649,7 @@ export function AvBarTrackerDialog({
       scaleBlend?: NonNullable<TrackingDiagnostics["calibration"]>["scaleBlend"];
       scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
       lidarFloor?: NonNullable<TrackingDiagnostics["calibration"]>["lidarFloor"];
+      bodyLoss?: NonNullable<TrackingDiagnostics["calibration"]>["bodyLoss"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       // A yardstick that would have convicted most of the rulers stood down instead (the 10-30
       // Pendlay row's grip read 52.7 units against a 70-unit shoulder span). Recorded so an
@@ -2227,11 +2229,20 @@ export function AvBarTrackerDialog({
     const independentTeacher = RULERS_THAT_MAY_TEACH_A_LIMB.includes(
       scaleSource as (typeof RULERS_THAT_MAY_TEACH_A_LIMB)[number],
     );
+    // LiDAR TEACHES WHEN SOMETHING ELSE AGREED WITH IT (2026-11-25): the floor ruler is independent
+    // of the bones, and corroboration keeps a wrong read out of the athlete's record. Its own
+    // scale is what the bones are measured with, as a plate's is.
+    const lidarTeacherScale =
+      !independentTeacher && lidarEstimate != null && scaleVerdict.agreedSources.includes("lidar") && scaleVerdict.agreedSources.length > 1
+        ? lidarEstimate.scale
+        : null;
     const limbMeasurementSource: string | null = independentTeacher
       ? scaleSource
-      : consensusWithoutBodyModel != null
-        ? "consensus"
-        : null;
+      : lidarTeacherScale != null
+        ? "lidar"
+        : consensusWithoutBodyModel != null
+          ? "consensus"
+          : null;
     // Measured on calibrationInput -- the SAME raw-unit landmarks limbSpansUnits is read from --
     // never on `frames`, whose landmarks are already multiplied by the scale. Teaching from
     // `frames` applied the scale twice and stored every bone about 250x too short (an upper arm
@@ -2239,7 +2250,9 @@ export function AvBarTrackerDialog({
     // and a bone read have to be the same measurement, or the difference lands in every distance.
     const limbMeasurementsM = independentTeacher
       ? measureLimbsInMetres(calibrationInput, scaleFactor)
-      : consensusWithoutBodyModel != null
+      : lidarTeacherScale != null
+        ? measureLimbsInMetres(calibrationInput, lidarTeacherScale)
+        : consensusWithoutBodyModel != null
         ? measureLimbsInMetres(calibrationInput, consensusWithoutBodyModel)
         : null;
 
@@ -2440,6 +2453,7 @@ export function AvBarTrackerDialog({
       calibrationDiagnostics.body3DRuler = body3DRulerDiagnostics;
       // The LiDAR reading beside every other ruler, as ratios, so overwatch's cross-check (does
       // the body agree with the floor? does the plate?) is in the export on every take.
+      calibrationDiagnostics.bodyLoss = measureBodyLoss(rawFrames);
       calibrationDiagnostics.lidarFloor = {
         scan: recordingStats.lidarFloor ?? null,
         unavailableBecause: recordingStats.lidarFloorUnavailableBecause ?? null,

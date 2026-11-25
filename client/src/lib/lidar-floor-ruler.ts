@@ -61,6 +61,8 @@ const MIN_DISTANCE_M = 0.3;
 const MAX_DISTANCE_M = 15;
 const MIN_ANKLE_VISIBILITY = 0.5;
 const MIN_FRAMES = 5;
+const LOWEST_FEET_QUANTILE = 0.9;
+const FLOOR_BAND_OF_FRAME = 0.02;
 const HALF = 0.5;
 const DEGREES_IN_HALF_TURN = 180;
 const DEG_TO_RAD = Math.PI / DEGREES_IN_HALF_TURN;
@@ -159,10 +161,19 @@ export function lidarFloorScale(input: {
       const g = gravityInImage(pitchDeg, rollDeg, f.frameWidth > f.frameHeight);
       const z = depthOfFloorPixel(px, py, f.frameWidth, f.frameHeight, fovDeg, g, planeBelowCamera);
       if (z == null || z < MIN_DISTANCE_M || z > MAX_DISTANCE_M) return null;
-      return { z, metresPerPixelPerMetre: (TWO * Math.tan(fovDeg * DEG_TO_RAD * HALF)) / Math.max(f.frameWidth, f.frameHeight) };
+      return { z, py: py / f.frameHeight, metresPerPixelPerMetre: (TWO * Math.tan(fovDeg * DEG_TO_RAD * HALF)) / Math.max(f.frameWidth, f.frameHeight) };
     })
-    .filter((r): r is { z: number; metresPerPixelPerMetre: number } => r != null);
-  const depths = perFrame.map((r) => r.z);
+    .filter((r): r is { z: number; py: number; metresPerPixelPerMetre: number } => r != null);
+  // ONLY FEET ON THE FLOOR (2026-11-25). A box jump stands on a 61cm box for seconds, and a foot
+  // in the air or on the box is not on the plane the ray is cut against. Feet on the floor are the
+  // LOWEST feet in the image, so only frames whose ankles sit within FLOOR_BAND_OF_FRAME of the
+  // lowest the ankles went (its 90th percentile, so one stray landmark cannot set it) are read --
+  // however long the athlete stood on the box. A 61cm box at 3m is about 13% of the frame above
+  // the floor; ankle jitter is about 1%. A lift whose feet never move keeps every frame.
+  const ys = [...perFrame.map((r) => r.py)].sort((a, b) => a - b);
+  const lowestFeet = ys.length > 0 ? ys[Math.floor((ys.length - 1) * LOWEST_FEET_QUANTILE)] : 0;
+  const onFloor = perFrame.filter((r) => r.py >= lowestFeet - FLOOR_BAND_OF_FRAME);
+  const depths = onFloor.map((r) => r.z);
   const scale = perFrame.length > 0 ? perFrame[0].metresPerPixelPerMetre : null;
   if (depths.length < MIN_FRAMES || scale == null) return { reading: null, refusedBecause: "no_feet_on_the_floor" };
   const distanceM = median(depths);

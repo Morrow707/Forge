@@ -33,6 +33,9 @@ const ANKLE_CONFIDENCE = 0.9;
 const TWO = 2;
 const SIX_DECIMALS = 6;
 const PITCH_DOWN_DEG = 12;
+const BOX_M = 0.61;
+const FLOOR_FRAMES = 6;
+const BOX_FRAMES = 20;
 const GOOD_SCAN: LidarFloorScan = { cameraHeightM: CAMERA_HEIGHT_M, floorShare: FLOOR_SHARE, spreadM: FLAT_SPREAD_M, frames: SCAN_FRAMES };
 
 /** Where on the image an ankle at `distanceM` lands, for a camera tilted down by pitchDeg. */
@@ -102,6 +105,22 @@ describe("the LiDAR floor ruler", () => {
     expect(lidarFloorScale({ ...base, scan: { ...GOOD_SCAN, floorShare: LITTLE_FLOOR }, frames: feet }).refusedBecause).toBe("scan_saw_no_floor");
     expect(lidarFloorScale({ ...base, scan: GOOD_SCAN, pitchDeg: null, frames: feet }).refusedBecause).toBe("no_gravity");
     expect(lidarFloorScale({ ...base, scan: GOOD_SCAN, frames: [] }).refusedBecause).toBe("no_feet_on_the_floor");
+  });
+
+  it("reads the floor frames of a box jump however long the athlete stands on the box", () => {
+    const ankle = INCHES_6_6 * METRES_PER_INCH * ANKLE_FRACTION;
+    const onFloor = frames(anklePixel(DISTANCE_M, ankle, PITCH_DOWN_DEG), FLOOR_FRAMES);
+    const onBox = frames(anklePixel(DISTANCE_M, ankle + BOX_M, PITCH_DOWN_DEG), BOX_FRAMES);
+    const { reading } = lidarFloorScale({
+      scan: GOOD_SCAN,
+      pitchDeg: PITCH_DOWN_DEG,
+      rollDeg: 0,
+      fovDeg: ULTRA_WIDE_FOV_DEG,
+      frames: [...onFloor, ...onBox],
+      heightIn: INCHES_6_6,
+    });
+    expect(reading?.distanceM).toBeCloseTo(DISTANCE_M, TWO_DECIMALS);
+    expect(reading?.framesUsed).toBe(FLOOR_FRAMES);
   });
 
   it("skips a ray that never comes down to the floor", () => {
