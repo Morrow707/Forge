@@ -1166,7 +1166,17 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             device.activeVideoMinFrameDuration = frameDuration
             device.activeVideoMaxFrameDuration = frameDuration
             enableVideoHdr(on: device, format: chosen)
+            // THE ULTRA-WIDE'S LENS DISTORTION, CORRECTED ON PURPOSE (2026-11-24). iOS corrects it
+            // by default where the lens supports it, and nothing here had ever said so. Every
+            // ruler in the scale blend assumes a pinhole camera -- a plate's diameter, a bone's
+            // length, the LiDAR floor distance -- and an uncorrected 0.5x frame bends straight
+            // lines near its edges. Set explicitly and logged on its own line, so a phone where
+            // it is unsupported is visible in the export rather than assumed.
+            if device.isGeometricDistortionCorrectionSupported {
+                device.isGeometricDistortionCorrectionEnabled = true
+            }
             device.unlockForConfiguration()
+            logDiag("distortion correction: \(device.isGeometricDistortionCorrectionSupported ? (device.isGeometricDistortionCorrectionEnabled ? "on" : "off") : "unsupported on this lens")")
             let d = dims(chosen)
             // The field of view goes in the log because it is the number that separates two
             // formats the previous line reports identically -- without it, a tight preview and

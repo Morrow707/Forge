@@ -10113,6 +10113,17 @@ export const trackingDiagnosticsSchema = z.object({
   // Declared here because zod STRIPS what it does not declare, silently, which has bitten this
   // blob twice; a declaration that never reached the database would be the same silence this
   // field exists to end.
+  // A sprint timed from the finish line: its start's confidence and uncertainty (2026-11-24).
+  sprintFinishView: z
+    .object({
+      startConfidence: z.number(),
+      startUncertaintySeconds: z.number().nullable(),
+      startTorsoPx: z.number().nullable(),
+      setHoldSeconds: z.number(),
+      notes: z.array(z.string().max(40)).max(8),
+    })
+    .nullable()
+    .optional(),
   objectSystem: z
     .object({
       declared: z.enum(["coreml", "box", "none"]),

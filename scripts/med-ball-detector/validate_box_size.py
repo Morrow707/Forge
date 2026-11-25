@@ -23,8 +23,11 @@ from pathlib import Path
 
 DETECTOR_DIR = Path(__file__).resolve().parent
 BEST_WEIGHTS = DETECTOR_DIR / "runs" / "detect" / "weights" / "best.pt"
-VAL_IMAGES = DETECTOR_DIR / "dataset" / "images" / "val"
-VAL_LABELS = DETECTOR_DIR / "dataset" / "labels" / "val"
+# `--val-dir NAME` measures another held-out split built beside the real one, such as
+# degrade_for_phones.py's val_phone (the same 41 images as a cheaper phone would see them).
+_VAL_NAME = sys.argv[sys.argv.index("--val-dir") + 1] if "--val-dir" in sys.argv else "val"
+VAL_IMAGES = DETECTOR_DIR / "dataset" / "images" / _VAL_NAME
+VAL_LABELS = DETECTOR_DIR / "dataset" / "labels" / _VAL_NAME
 
 #: Matching threshold. Deliberately loose: the question is not "is this detection good enough to
 #: count" but "when it did find the object, how big did it draw the box", and a tight threshold

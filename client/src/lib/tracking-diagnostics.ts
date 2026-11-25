@@ -186,6 +186,16 @@ export type TrackingDiagnostics = {
    *  they were written, and silence and a broken detector look identical in an export.
    *  Declared; gates nothing (Rule #1). */
   objectSystem?: CaptureObjectSystem | null;
+  /** A SPRINT FILMED FROM THE FINISH LINE (sprint-finish-view.ts): how sure the start was, how
+   *  wide it could be, how big the athlete was to read, how long they held the set, and any part
+   *  it could not find. Recorded beside the time; gates nothing (Rule #1). */
+  sprintFinishView?: {
+    startConfidence: number;
+    startUncertaintySeconds: number | null;
+    startTorsoPx: number | null;
+    setHoldSeconds: number;
+    notes: string[];
+  } | null;
   // Present only on a "scale_free_only" capture. Lives here rather than in repBreakdown because
   // that type's velocity fields are non-null and read by every chart downstream; widening them
   // to carry a null for this one case would push the question onto all of them.

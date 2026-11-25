@@ -20,7 +20,8 @@ import { crossingTrustScore } from "@/lib/capture-trust";
 import { type PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
-import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
+import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks, visionJointsToNormalizedLandmarks } from "@/lib/vision-body-landmarks";
+import { timeSprintFromFinishView, type FinishLine, type FinishViewResult } from "@/lib/sprint-finish-view";
 import {
   detectSprintCrossings,
   detectSprintFaults,
@@ -59,6 +60,24 @@ const HIP_INDICES = [POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP];
 // missed tap from silently recording (and needing to analyze) an
 // arbitrarily long, storage-bloating clip.
 const MAX_RECORDING_MS = 15000;
+
+/** The finish line as the athlete tapped its two ends, for the finish-line view. */
+function drawFinishLine(ctx: CanvasRenderingContext2D, ends: { x: number; y: number }[], width: number, height: number) {
+  ctx.strokeStyle = CHECKPOINT_COLOR;
+  ctx.fillStyle = CHECKPOINT_COLOR;
+  ctx.lineWidth = 3;
+  ends.forEach((p) => {
+    ctx.beginPath();
+    ctx.arc(p.x * width, p.y * height, 6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  if (ends.length === 2) {
+    ctx.beginPath();
+    ctx.moveTo(ends[0].x * width, ends[0].y * height);
+    ctx.lineTo(ends[1].x * width, ends[1].y * height);
+    ctx.stroke();
+  }
+}
 
 function drawCheckpoints(ctx: CanvasRenderingContext2D, checkpointXs: number[], width: number, height: number) {
   ctx.strokeStyle = CHECKPOINT_COLOR;
@@ -198,6 +217,13 @@ export function AvSprintTrackerDialog({
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
   const manualVideoRef = useRef<HTMLVideoElement>(null);
   const checkpointsRef = useRef<number[]>([]);
+  // WHERE THE PHONE STANDS (2026-11-24). "side": the existing view, off the side of the lane, with
+  // a tapped column per checkpoint. "finish": on the finish line, off to the side, pointed back up
+  // the lane -- the athlete taps the two ends of the finish line and sprint-finish-view.ts times
+  // the start from the first movement and the finish from the chest crossing. Straight sprints only.
+  const [phoneAt, setPhoneAt] = useState<"side" | "finish">("side");
+  const finishEndsRef = useRef<{ x: number; y: number }[]>([]);
+  const finishViewRef = useRef<FinishViewResult | null>(null);
   const pointsRef = useRef<SprintPoint[]>([]);
   const framesRef = useRef<PoseFrame[]>([]);
   const stepRef = useRef<Step>("warning");
@@ -231,6 +257,8 @@ export function AvSprintTrackerDialog({
   const drillDefaults = sprintDefaultsFor(drillName);
   const [presetId, setPresetId] = useState(drillDefaults?.presetId ?? "40yd");
   const preset: SprintPreset = SPRINT_PRESETS.find((p) => p.id === presetId) ?? SPRINT_PRESETS[2];
+  // The finish-line view times a straight sprint only; a shuttle or the 3-cone doubles back.
+  const finishView = phoneAt === "finish" && preset.tapCount === 2;
   const [distanceYards, setDistanceYards] = useState(
     drillDefaults?.distanceYards != null ? String(drillDefaults.distanceYards) : "40",
   );
@@ -296,6 +324,9 @@ export function AvSprintTrackerDialog({
     setFaults([]);
     setSavedToProfile(false);
     checkpointsRef.current = [];
+    finishEndsRef.current = [];
+    finishViewRef.current = null;
+    setPhoneAt("side");
     setCheckpointCount(0);
     // Back to THIS drill's own defaults, not to the 40-yard dash. The dialog resets every time
     // it opens, so resetting to a flat 40 here would undo the per-drill default on the first
@@ -334,13 +365,24 @@ export function AvSprintTrackerDialog({
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (step === "calibrate" || step === "capture") {
-      drawCheckpoints(ctx, checkpointsRef.current, canvas.width, canvas.height);
+      if (finishView) drawFinishLine(ctx, finishEndsRef.current, canvas.width, canvas.height);
+      else drawCheckpoints(ctx, checkpointsRef.current, canvas.width, canvas.height);
     }
   }
 
   function handleOverlayClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (step !== "calibrate" || checkpointsRef.current.length >= preset.tapCount) return;
+    if (step !== "calibrate") return;
     const rect = e.currentTarget.getBoundingClientRect();
+    if (finishView) {
+      if (finishEndsRef.current.length >= 2) return;
+      finishEndsRef.current = [
+        ...finishEndsRef.current,
+        { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height },
+      ];
+      setCheckpointCount(finishEndsRef.current.length);
+      return;
+    }
+    if (checkpointsRef.current.length >= preset.tapCount) return;
     const normalizedX = (e.clientX - rect.left) / rect.width;
     checkpointsRef.current = [...checkpointsRef.current, normalizedX];
     setCheckpointCount(checkpointsRef.current.length);
@@ -348,6 +390,7 @@ export function AvSprintTrackerDialog({
 
   function resetCheckpoints() {
     checkpointsRef.current = [];
+    finishEndsRef.current = [];
     setCheckpointCount(0);
   }
 
@@ -358,6 +401,14 @@ export function AvSprintTrackerDialog({
   }
 
   function buildCheckpoints(): SprintCheckpoint[] | null {
+    // The finish-line view has no columns to cross; its two checkpoints carry only the distance,
+    // which is what the manual fallback and the saved result read.
+    if (finishView) {
+      const distanceNum = Number(distanceYards) || 0;
+      return finishEndsRef.current.length === 2 && distanceNum > 0
+        ? [{ x: 0 }, { x: 1, segmentDistanceYards: distanceNum }]
+        : null;
+    }
     const taps = checkpointsRef.current;
     if (taps.length < preset.tapCount) return null;
     if (preset.tapCount === 3) {
@@ -430,7 +481,11 @@ export function AvSprintTrackerDialog({
     };
 
     const checkpoints = buildCheckpoints();
-    const crossing = checkpoints ? detectSprintCrossings(pointsRef.current, { checkpoints }) : null;
+    const crossing = finishView
+      ? finishViewResult(rawFrames, checkpoints)
+      : checkpoints
+        ? detectSprintCrossings(pointsRef.current, { checkpoints })
+        : null;
     if (crossing) {
       manuallyTimedRef.current = false;
       finishWithResult(crossing);
@@ -439,6 +494,40 @@ export function AvSprintTrackerDialog({
       setManualStartTime(null);
       changeStep("manual");
     }
+  }
+
+  /** Times the run from the finish-line view and shapes it as the side view's result, so the
+   *  review, the trust score and the save read it the same way. Null sends the athlete to the
+   *  manual scrub-and-pin step, exactly as a side-on read that found no crossings does. */
+  function finishViewResult(rawFrames: NativePoseFrame[], checkpoints: SprintCheckpoint[] | null): SprintResult | null {
+    const ends = finishEndsRef.current;
+    const distance = checkpoints?.[1]?.segmentDistanceYards ?? 0;
+    if (ends.length !== 2 || !(distance > 0)) return null;
+    const line: FinishLine = { a: ends[0], b: ends[1] };
+    const r = timeSprintFromFinishView(
+      rawFrames.map((f) => ({
+        t: f.timestamp * 1000,
+        landmarks: visionJointsToNormalizedLandmarks(f),
+        frameWidth: f.frameWidth,
+        frameHeight: f.frameHeight,
+      })),
+      line,
+    );
+    finishViewRef.current = r;
+    if (r.totalElapsedSeconds == null || r.startT == null) return null;
+    const avg = Math.round((distance / r.totalElapsedSeconds) * 100) / 100;
+    return {
+      totalElapsedSeconds: r.totalElapsedSeconds,
+      totalDistanceYards: distance,
+      splits: [{ fromCheckpoint: 0, toCheckpoint: 1, elapsedSeconds: r.totalElapsedSeconds, distanceYards: distance }],
+      avgSpeedYardsPerSec: avg,
+      likelyGlitch: avg > MAX_PLAUSIBLE_SPRINT_SPEED_YARDS_PER_SEC,
+      incompleteDrill: false,
+      crossingsFound: 2,
+      crossingsExpected: 2,
+      startCrossingT: r.startT,
+      crossingFrameGapsMs: [r.startGapMs ?? 0, r.finishGapMs ?? 0],
+    };
   }
 
   function finishWithResult(sprintResult: SprintResult) {
@@ -571,7 +660,18 @@ export function AvSprintTrackerDialog({
         // so a sprint or mechanics take that went wrong left no account of itself, which is
         // exactly what CLAUDE.md's capture-diagnostics rules exist to prevent. Measured;
         // gates nothing, and an older server that ignores the key still logs the capture.
-        trackingDiagnostics: { outcome: "tracked", sampling: measureTraceSampling(framesRef.current), objectSystem: declareObjectSystem("av_sprint") },
+        trackingDiagnostics: { outcome: "tracked", sampling: measureTraceSampling(framesRef.current),
+          objectSystem: declareObjectSystem("av_sprint"),
+          sprintFinishView: finishView && finishViewRef.current
+            ? {
+                startConfidence: finishViewRef.current.startConfidence,
+                startUncertaintySeconds: finishViewRef.current.startUncertaintySeconds,
+                startTorsoPx: finishViewRef.current.startTorsoPx,
+                setHoldSeconds: finishViewRef.current.setHoldSeconds,
+                notes: finishViewRef.current.notes,
+              }
+            : null,
+        },
         // ARC-1 -- the normalized confidence column both capture tracks now
         // share (see skillSessionLogs.trustScorePct's own schema comment).
         // Null rather than a made-up number when the score couldn't be
@@ -723,7 +823,9 @@ export function AvSprintTrackerDialog({
                   not get. See the readFailed state. */}
               {step === "calibrate" && !readFailed && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
-                  {t("Make sure your whole body will be in frame during the run.")}
+                  {finishView
+                    ? t("Stand the phone on the finish line, off to the side, pointed back up the lane.")
+                    : t("Make sure your whole body will be in frame during the run.")}
                 </div>
               )}
 
@@ -765,8 +867,23 @@ export function AvSprintTrackerDialog({
                     }}
                     className="text-white"
                   />
+                  {preset.tapCount === 2 && (
+                    <RadioChipGroup
+                      label={t("Phone at")}
+                      options={[t("Side of the lane"), t("The finish line")]}
+                      value={phoneAt === "finish" ? t("The finish line") : t("Side of the lane")}
+                      onChange={(label) => {
+                        setPhoneAt(label === t("The finish line") ? "finish" : "side");
+                        resetCheckpoints();
+                      }}
+                      className="text-white"
+                    />
+                  )}
                   <p className="text-center text-sm text-white">
-                    {preset.tapCount === 3 ? (
+                    {finishView ? (
+                      <>
+                        {t("Tap both ends of the")} <strong>{t("finish line")}</strong> {t("({checkpointCount}/2 marked).", { checkpointCount })}</>
+                    ) : preset.tapCount === 3 ? (
                       <>
                         {t("Tap the screen at")} <strong>{t("center")}</strong>{t(", then each")} <strong>{t("cone")}</strong> {t("in run order ( {checkpointCount}/3 marked).", { checkpointCount })}</>
                     ) : preset.tapCount === 1 ? (
