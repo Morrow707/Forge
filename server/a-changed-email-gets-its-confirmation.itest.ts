@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { exemptEmails, users } from "@shared/schema";
 import { testOutbox } from "./email";
 import { resetDatabase } from "./test-support/fixtures";
 import { waitForEmailTo } from "./test-support/wait-for-email";
@@ -52,5 +52,25 @@ describe("a changed email gets its confirmation link", () => {
     expect(res.status).toBe(401);
     const [row] = await db.select({ email: users.email }).from(users).where(eq(users.id, athlete.id));
     expect(row.email).toBe(athlete.email);
+  });
+
+  it("an address already on the exempt list comps the account when it changes to it", async () => {
+    const athlete = await makeLoginableUser({ role: "athlete" });
+    await db.update(users).set({ isBetaAccount: false }).where(eq(users.id, athlete.id));
+    await db.insert(exemptEmails).values({ email: "listed@example.edu" });
+    const client = await loginAs(server.baseUrl, athlete);
+    const res = await client.patch("/api/account/email", { password: TEST_PASSWORD, newEmail: "Listed@Example.edu" });
+    expect(res.status).toBe(200);
+    const [row] = await db.select({ comped: users.isBetaAccount }).from(users).where(eq(users.id, athlete.id));
+    expect(row.comped).toBe(true);
+  });
+
+  it("an address not on the list leaves the account as it was", async () => {
+    const athlete = await makeLoginableUser({ role: "athlete" });
+    await db.update(users).set({ isBetaAccount: false }).where(eq(users.id, athlete.id));
+    const client = await loginAs(server.baseUrl, athlete);
+    await client.patch("/api/account/email", { password: TEST_PASSWORD, newEmail: "unlisted@example.edu" });
+    const [row] = await db.select({ comped: users.isBetaAccount }).from(users).where(eq(users.id, athlete.id));
+    expect(row.comped).toBe(false);
   });
 });

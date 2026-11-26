@@ -4601,6 +4601,26 @@ export const storage = {
       .where(eq(users.id, userId))
       .returning({ id: users.id, email: users.email });
     await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, userId));
+    // A NEW ADDRESS ON THE EXEMPT LIST COMPS THE ACCOUNT, the same rule createUser applies at
+    // signup (2026-11-25). An admin lists an address; somebody who signed up under a typo and then
+    // corrected it was never matched, because the list is only read when an address is added or
+    // an account is created. Leaving a listed address is not an un-comp: removing an account from
+    // the list is the admin's act, on the list itself.
+    if (row) {
+      const [listed] = await db
+        .select({ id: exemptEmails.id })
+        .from(exemptEmails)
+        .where(eq(exemptEmails.email, row.email))
+        .limit(1);
+      if (listed) {
+        const [comped] = await db
+          .update(users)
+          .set({ isBetaAccount: true })
+          .where(and(eq(users.id, userId), eq(users.isBetaAccount, false)))
+          .returning({ id: users.id });
+        if (comped) await this.logBillingEvent(userId, "admin.exempt_list_matched_on_email_change", {});
+      }
+    }
     return row ?? null;
   },
 
